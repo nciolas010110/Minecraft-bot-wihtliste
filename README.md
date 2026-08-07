@@ -28,6 +28,7 @@ Dieser Discord-Bot verwendet `discord.js` v14 und `rcon-client`, um Minecraft-Sp
 - `/whitelistremove mcname:<Minecraft-Name>` entfernt den Spieler von der Whitelist.
 - `/whitelistban discord:<Benutzer> | mcname:<Minecraft-Name>` bannt einen Spieler und entfernt ihn von der Whitelist.
 - `/user discord:<Benutzer> | mcname:<Minecraft-Name>` zeigt die Zuordnung und Ban-Informationen an.
+- `/list` zeigt alle gespeicherten Discord- zu Minecraft-Zuordnungen an.
 
 ## Minecraft Server / RCON Setup
 
