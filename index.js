@@ -3,6 +3,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { Client, Collection, GatewayIntentBits, Events, REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
+import { startServerMonitor } from './utils/monitor.js';
 
 dotenv.config();
 
@@ -60,6 +61,8 @@ client.once(Events.ClientReady, async () => {
   } catch (error) {
     console.error('Fehler beim Registrieren der Slash-Commands:', error);
   }
+
+  await startServerMonitor(client);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { checkMinecraftUser } from '../utils/mojang.js';
 import { runRconCommand } from '../utils/rcon.js';
-import { setUserMapping, isBanned } from '../utils/storage.js';
+import { setUserMapping, isBanned, getUserMapping, getDiscordByMcName } from '../utils/storage.js';
 
 const cooldowns = new Map();
 const COOLDOWN_SECONDS = 30;
@@ -43,6 +43,30 @@ export async function execute(interaction) {
             .setTitle('Zugriff verweigert')
             .setDescription('Du bist gesperrt oder dieser Minecraft-Name ist gebannt.')
             .setColor('Red')
+        ]
+      });
+    }
+
+    const existingMapping = await getUserMapping(userId);
+    if (existingMapping) {
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Bereits registriert')
+            .setDescription(`Du hast bereits den Minecraft-Namen **${existingMapping}** zugeordnet. Bitte entferne ihn zuerst mit "/whitelistremove" oder verwende denselben Namen erneut.`)
+            .setColor('Orange')
+        ]
+      });
+    }
+
+    const linkedDiscord = await getDiscordByMcName(mcName);
+    if (linkedDiscord) {
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Name bereits vergeben')
+            .setDescription(`Der Minecraft-Name **${mcName}** ist bereits mit einem anderen Discord-Konto verknüpft.`)
+            .setColor('Orange')
         ]
       });
     }

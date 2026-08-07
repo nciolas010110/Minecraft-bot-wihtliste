@@ -19,10 +19,19 @@ export async function execute(interaction) {
     });
   }
 
-  const lines = entries.map(([discordId, mcName]) => {
+  const lines = await Promise.all(entries.map(async ([discordId, mcName]) => {
     const banned = bans.discord.includes(discordId) || bans.mcNames.includes(mcName.toLowerCase());
-    return `**${discordId}** → **${mcName}**${banned ? ' (Gebannt)' : ''}`;
-  });
+    let userTag = discordId;
+
+    try {
+      const user = await interaction.client.users.fetch(discordId);
+      userTag = user.tag;
+    } catch {
+      // Falls der Discord-Benutzer nicht geladen werden kann, bleibt die ID sichtbar.
+    }
+
+    return `**${userTag}** → **${mcName}**${banned ? ' (Gebannt)' : ''}`;
+  }));
 
   const description = lines.join('\n');
   const embed = new EmbedBuilder()
