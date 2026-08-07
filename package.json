@@ -1,0 +1,18 @@
+{
+  "name": "minecraft-whitelist-bot",
+  "version": "1.0.0",
+  "description": "Discord-Bot zum Whitelisten von Minecraft-Spielern via RCON.",
+  "main": "index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.0",
+    "dotenv": "^16.1.4",
+    "rcon-client": "^4.2.5"
+  }
+}
