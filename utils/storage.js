@@ -1,3 +1,8 @@
+/*
+  Speicher-Wrapper für persistente Daten in `data/storage.json`.
+  - `userMappings`: Discord-ID → Minecraft-Name
+  - `bans`: Listen gesperrter Discord-IDs und Minecraft-Namen
+*/
 import fs from 'fs/promises';
 import path from 'path';
 

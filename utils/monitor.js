@@ -1,3 +1,9 @@
+/*
+  Server-Monitor
+  - Führt regelmäßig die RCON-Befehle `tps` und `gc` aus.
+  - Parst TPS- und RAM-Werte.
+  - Sendet Warnungen und Erholungsmeldungen in einen Discord-Kanal.
+*/
 import { EmbedBuilder } from 'discord.js';
 import { runRconCommand } from './rcon.js';
 

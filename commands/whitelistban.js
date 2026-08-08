@@ -1,3 +1,10 @@
+/*
+  /whitelistban
+  - Bannt einen Minecraft-Namen und entfernt ihn von der Whitelist.
+  - Unterstützt die Angabe eines Discord-Benutzers oder eines Minecraft-Namens.
+  - Speichert Banninformationen in der lokalen JSON-Datei.
+  - Nur Administratoren dürfen diesen Befehl ausführen.
+*/
 import { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from 'discord.js';
 import { runRconCommand } from '../utils/rcon.js';
 import { getUserMapping, getDiscordByMcName, addBan, removeUserMappingByMcName, removeUserMappingByDiscord } from '../utils/storage.js';

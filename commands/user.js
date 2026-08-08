@@ -1,3 +1,9 @@
+/*
+  /user
+  - Zeigt die Discord-zu-Minecraft-Zuordnung an.
+  - Unterstützt Abfragen für den eigenen Benutzer, einen angegebenen Discord-Benutzer oder einen Minecraft-Namen.
+  - Gibt den Bannstatus aus.
+*/
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getUserMapping, getDiscordByMcName, getBanLists } from '../utils/storage.js';
 

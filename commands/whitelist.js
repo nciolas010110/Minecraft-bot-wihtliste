@@ -1,3 +1,10 @@
+/*
+  /whitelist
+  - Prüft einen Minecraft-Namen über die Mojang-API.
+  - Führt `whitelist add <Name>` via RCON aus.
+  - Speichert die Zuordnung zwischen Discord-ID und Minecraft-Name.
+  - Verwendet einen 30 Sekunden Cooldown pro Discord-Benutzer.
+*/
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { checkMinecraftUser } from '../utils/mojang.js';
 import { runRconCommand } from '../utils/rcon.js';

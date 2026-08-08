@@ -1,3 +1,9 @@
+/*
+  RCON-Hilfsmodul
+  - Baut bei jedem Aufruf eine Verbindung auf.
+  - Führt einen Befehl aus und schließt die Verbindung.
+  - Verwendet `RCON_HOST`, `RCON_PORT` und `RCON_PASSWORD` aus der Umgebung.
+*/
 import { Rcon } from 'rcon-client';
 
 const host = process.env.RCON_HOST;

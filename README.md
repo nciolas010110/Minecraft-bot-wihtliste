@@ -1,186 +1,182 @@
 # Minecraft Whitelist Bot
 
-Dieser Discord-Bot verwendet `discord.js` v14 und `rcon-client`, um Minecraft-Spieler per Slash-Command `/whitelist` auf einem Server freizuschalten.
+Dieser Discord-Bot ermöglicht das Whitelisten von Minecraft-Spielern per Slash-Command und steuert den Minecraft-Server über RCON.
 
-## Setup
+## Übersicht
 
-1. Erstelle eine Kopie von `.env.example` als `.env`.
-2. Trage die Werte für `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID`, `RCON_HOST`, `RCON_PORT` und `RCON_PASSWORD` ein.
+Dieser Bot bietet:
+- `/whitelist mcname:<Minecraft-Name>` zum Freischalten auf der Minecraft-Whitelist
+- `/whitelistremove mcname:<Minecraft-Name>` zum Entfernen von der Whitelist
+- `/whitelistban discord:<Benutzer> | mcname:<Minecraft-Name>` zum Sperren und Whitelist-Entfernen
+- `/user` zur Abfrage gespeicherter Zuordnungen
+- `/list` zur Anzeige aller gespeicherten Zuordnungen
+- Optionales Server-Monitoring per RCON (TPS, RAM)
+
+## Voraussetzungen
+
+- Node.js >= 18
+- Ein Discord-Bot mit Token und Client-ID
+- Ein Minecraft-Server mit aktiviertem RCON
+- Eine `.env`-Datei mit den benötigten Konfigurationswerten
+
+## Installation
+
+1. Kopiere `.env.example` nach `.env`.
+2. Trage deine Discord- und RCON-Werte in `.env` ein.
 3. Installiere die Abhängigkeiten:
 
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
 4. Starte den Bot:
 
-   ```bash
-   npm start
-   ```
-
-## Nutzung
-
-- `/whitelist mcname:<Minecraft-Name>` prüft zunächst, ob der Minecraft-Name bei Mojang existiert.
-- Bei erfolgreicher Überprüfung wird per RCON `whitelist add <name>` auf dem Minecraft-Server ausgeführt.
-- Der Befehl speichert die Zuordnung zwischen Discord-Benutzer und Minecraft-Name.
-- Der Befehl hat einen Cooldown von 30 Sekunden pro Benutzer.
-- Optional wird dem Discord-Benutzer die Rolle `Whitelisted` zugewiesen, falls die Rolle im Server existiert.
-- `/whitelistremove mcname:<Minecraft-Name>` entfernt den Spieler von der Whitelist.
-- `/whitelistban discord:<Benutzer> | mcname:<Minecraft-Name>` bannt einen Spieler und entfernt ihn von der Whitelist.
-- `/user discord:<Benutzer> | mcname:<Minecraft-Name>` zeigt die Zuordnung und Ban-Informationen an.
-- `/list` zeigt alle gespeicherten Discord- zu Minecraft-Zuordnungen an.
-
-## Minecraft Server / RCON Setup
-
-1. Öffne die `server.properties` im Minecraft-Server-Verzeichnis, z. B. `/opt/minecraft/server.properties`.
-2. Setze oder ändere folgende Einträge:
-
-   ```properties
-   enable-rcon=true
-   rcon.port=25575
-   rcon.password=<ein starkes, langes Passwort>
-   broadcast-rcon-to-ops=false
-   ```
-
-3. Speichere die Datei und starte den Minecraft-Server neu:
-
-   ```bash
-   sudo systemctl restart mc-server
-   ```
-
-4. Da Bot und Minecraft-Server im selben Container laufen, verwende für den Bot folgende Werte in `.env`:
-
-   ```env
-   RCON_HOST=127.0.0.1
-   RCON_PORT=25575
-   RCON_PASSWORD=<das gleiche Passwort wie oben>
-   ```
-
-5. Optional kannst du RCON zunächst mit `mcrcon` testen:
-
-   ```bash
-   mcrcon -H 127.0.0.1 -P 25575 -p <passwort> "whitelist list"
-   ```
-
-   Wenn das funktioniert, ist die Server- und RCON-Konfiguration korrekt.
-
-## Bot-Code
-
-Im Bot installiert die Datei `utils/rcon.js` die Verbindung per `rcon-client` und führt Minecraft-Befehle so aus:
-
-```js
-import { Rcon } from 'rcon-client';
-
-const rcon = await Rcon.connect({
-  host: process.env.RCON_HOST,
-  port: Number(process.env.RCON_PORT),
-  password: process.env.RCON_PASSWORD
-});
-const response = await rcon.send(`whitelist add ${minecraftName}`);
-await rcon.end();
-```
-
-## Deployment-Schritte
-
-### 1. Vom PC zum GitHub-Repository
-
-1. Öffne dein Projekt auf dem PC.
-2. Füge neue Dateien hinzu und committe die Änderungen:
-
-   ```bash
-   git add .
-   git commit -m "Bot-Code und RCON-Dokumentation aktualisiert"
-   ```
-
-3. Push die Änderungen zu GitHub:
-
-   ```bash
-   git push origin main
-   ```
-
-   Falls dein Branch anders heißt, ersetze `main` durch den passenden Branch.
-
-### 2. Auf dem Server den Code holen
-
-1. Melde dich per SSH am Server an:
-
-   ```bash
-   ssh benutzer@dein-server
-   ```
-
-2. Wechsle in das Verzeichnis, in dem der Bot liegen soll, z. B. `/opt/minecraft-bot`.
-3. Falls das Verzeichnis noch nicht existiert, lege es an:
-
-   ```bash
-   mkdir -p /opt/minecraft-bot
-   cd /opt/minecraft-bot
-   ```
-
-4. Klone das Repository zum ersten Mal:
-
-   ```bash
-   git clone https://github.com/DEIN-USERNAME/DEIN-REPO.git .
-   ```
-
-   Oder, falls das Repository bereits existiert, hole die neuesten Änderungen:
-
-   ```bash
-   git pull origin main
-   ```
-
-### 3. `.env` auf dem Server anlegen
-
-1. Erstelle die Datei `.env` im Bot-Verzeichnis.
-2. Trage dort die sensiblen Werte ein:
-
-   ```env
-   DISCORD_TOKEN=DeinDiscordBotToken
-   CLIENT_ID=DeineBotClientID
-   # GUILD_ID optional, falls du nur in einem Testserver registrieren willst
-   GUILD_ID=DeineTestGuildID
-   RCON_HOST=127.0.0.1
-   RCON_PORT=25575
-   RCON_PASSWORD=<das gleiche Passwort wie in server.properties>
-   ```
-
-3. Achte darauf, dass `.env` nicht zu Git hinzugefügt wird – `.gitignore` schützt die Datei bereits.
-
-### 4. Auf dem Server installieren und starten
-
-1. Installiere die Abhängigkeiten:
-
-   ```bash
-   npm install
-   ```
-
-2. Starte den Bot:
-
-   ```bash
-   npm start
-   ```
-
-3. Prüfe, ob der Bot online ist und die Slash-Commands im Discord verfügbar sind.
-
-## `mcrcon` installieren
-
-Wenn `mcrcon` nicht installiert ist, kannst du es auf Debian/Ubuntu so installieren:
-
 ```bash
-sudo apt update
-sudo apt install mcrcon
+npm start
 ```
 
-Falls `mcrcon` nicht im Paketmanager vorhanden ist, kannst du es auch aus den Quellen bauen.
+## Umgebungsvariablen
 
-## Wichtige Sicherheits-Anmerkung
+Die folgenden Variablen werden unterstützt:
 
-- RCON braucht nicht nach außen geöffnet zu werden, wenn Bot und Server im selben Container laufen.
-- Verwende trotzdem ein starkes Passwort.
-- Schütze den Container-Zugriff, damit niemand einfach die `.env`-Daten lesen kann.
+- `DISCORD_TOKEN` - Discord-Bot-Token (erforderlich)
+- `CLIENT_ID` - Client-ID des Discord-Bots (erforderlich)
+- `GUILD_ID` - optional, für schnelle Slash-Command-Registrierung in einem Testserver
+- `RCON_HOST` - Hostname oder IP des Minecraft-Servers
+- `RCON_PORT` - RCON-Port (Standard: `25575`)
+- `RCON_PASSWORD` - RCON-Passwort
+- `MONITOR_CHANNEL_ID` - optional, Discord-Kanal-ID für Monitoring-Meldungen
+- `MONITOR_INTERVAL_SECONDS` - Überwachungsintervall in Sekunden (Standard: `60`)
+- `MONITOR_RAM_THRESHOLD` - RAM-Schwelle in Prozent für Warnungen (Standard: `80`)
+- `MONITOR_TPS_THRESHOLD` - TPS-Schwelle für Warnungen (Standard: `16`)
 
-## Dateiübersicht
+## Slash-Command-Referenz
 
-- `index.js` - Bot-Start und Registrierung der Slash-Commands
-- `commands/whitelist.js` - Slash-Command-Logik
-- `utils/mojang.js` - Mojang-API-Abfrage
-- `utils/rcon.js` - RCON-Verbindung und Ausführung von Minecraft-Befehlen
+### `/whitelist mcname:<Minecraft-Name>`
+- Prüft, ob der Name bei Mojang existiert.
+- Führt `whitelist add <Name>` via RCON aus.
+- Speichert die Zuordnung Discord-ID → Minecraft-Name in `data/storage.json`.
+- Setzt einen Cooldown von 30 Sekunden pro Discord-Benutzer.
+- Verhindert doppeltes Mapping für Discord-Benutzer und Minecraft-Namen.
+- Fügt im Server, falls vorhanden, optional die Rolle `Whitelisted` hinzu.
+
+### `/whitelistremove mcname:<Minecraft-Name>`
+- Entfernt den Spieler von der Whitelist via RCON.
+- Löscht die zugehörige Mapping-Eintragung.
+- Nur Administratoren dürfen diesen Befehl verwenden.
+
+### `/whitelistban [discord:<Benutzer>] [mcname:<Minecraft-Name>]`
+- Banniert den angegebenen Minecraft-Namen per RCON (`ban <Name>`).
+- Entfernt den Namen von der Whitelist.
+- Speichert den Bann in `data/storage.json`.
+- Optional wird ein zugeordnetes Discord-Konto gesperrt.
+- Nur Administratoren dürfen diesen Befehl verwenden.
+
+### `/user`
+- Gibt die eigene Zuordnung aus, wenn keine Option gesetzt ist.
+- Optional per `discord` oder `mcname` abfragbar.
+- Zeigt an, ob der Benutzer/Name gesperrt ist.
+
+### `/list`
+- Listet alle gespeicherten Discord-IDs mit zugehörigen Minecraft-Namen.
+- Markiert gesperrte Einträge als `(Gebannt)`.
+
+## Dateien und Logik
+
+### `index.js`
+- Lädt `.env` mit `dotenv`.
+- Erstellt einen Discord-Client mit Gateway-Intent `Guilds`.
+- Lädt automatisch alle JS-Dateien aus `commands/`.
+- Registriert Slash-Commands bei Discord (guild-basiert oder global).
+- Startet optionales Server-Monitoring über `utils/monitor.js`.
+
+### `commands/whitelist.js`
+- Validiert Cooldown, Bannstatus und bestehende Mappings.
+- Prüft Minecraft-Namen mit der Mojang-API via `utils/mojang.js`.
+- Führt RCON-Befehle mit `utils/rcon.js` aus.
+- Speichert Mappings in `utils/storage.js`.
+- Versendet Ausgaben als Discord-Embed.
+
+### `commands/whitelistremove.js`
+- Löscht einen Minecraft-Namen von der Whitelist.
+- Entfernt die zugehörige Zuordnung aus dem Speicher.
+- Gibt den Serverantworttext zurück.
+
+### `commands/whitelistban.js`
+- Bannt einen Minecraft-Namen und entfernt ihn von der Whitelist.
+- Speichert Banns sowohl für Discord-ID als auch Namen.
+- Unterstützt Abfragen per Discord-Benutzer oder Namen.
+
+### `commands/user.js`
+- Fragt eine gespeicherte Zuordnung ab.
+- Unterstützt Abfrage per Discord-User oder Minecraft-Name.
+- Gibt Bannstatus zurück.
+
+### `commands/list.js`
+- Listet alle gespeicherten Mappings.
+- Versucht, Discord-Tags aus den IDs zu laden.
+- Markiert gebannte Einträge.
+
+### `utils/mojang.js`
+- Enthält die Funktion `checkMinecraftUser(username)`.
+- Ruft die Mojang-API auf, um zu prüfen, ob ein Minecraft-Name existiert.
+- Gibt die Account-Daten zurück oder `null`, falls der Name nicht existiert.
+
+### `utils/rcon.js`
+- Stellt eine RCON-Verbindung zum Server her.
+- Führt den übergebenen Befehl aus und beendet die Verbindung wieder.
+- Bricht bei fehlenden RCON-Konfigurationswerten ab.
+
+### `utils/storage.js`
+- Speichert Daten in `data/storage.json`.
+- Unterstützt Mappings und Bannlisten.
+- Bietet Funktionen zum Lesen, Schreiben und Aktualisieren der JSON-Datei.
+
+### `utils/monitor.js`
+- Führt in regelmäßigen Intervallen RCON-Befehle `tps` und `gc` aus.
+- Parst TPS- und RAM-Werte aus der Serverausgabe.
+- Sendet Warnungen, wenn Schwellenwerte überschritten werden.
+- Sendet eine Erholungsnachricht, wenn der Server wieder in Ordnung ist.
+
+## Speicherformat
+
+Die Datei `data/storage.json` enthält folgenden Aufbau:
+
+```json
+{
+  "userMappings": {
+    "DiscordID": "MinecraftName"
+  },
+  "bans": {
+    "discord": ["DiscordID"],
+    "mcNames": ["minecraftname"]
+  }
+}
+```
+
+## RCON & Minecraft-Server
+
+In der Minecraft-Server-`server.properties` muss RCON aktiviert sein:
+
+```properties
+enable-rcon=true
+rcon.port=25575
+rcon.password=<starkes-passwort>
+```
+
+Falls dein Minecraft-Server keine Befehle `tps` oder `gc` unterstützt, funktioniert das Monitoring nur eingeschränkt.
+
+## Deployment
+
+1. Klone das Repository auf den Server.
+2. Erstelle die `.env`-Datei mit deinen Produktionswerten.
+3. Installiere Abhängigkeiten mit `npm install`.
+4. Starte den Bot mit `npm start`.
+
+> Für produktive Installationen empfiehlt sich ein Prozessmanager wie `pm2` oder `systemd`, damit der Bot nach Crashes automatisch neu startet.
+
+## Hinweise
+
+- Die Datei `.env` sollte niemals ins Git-Repository gelangen.
+- `GUILD_ID` ist optional; ohne sie werden die Slash-Commands global registriert.
+- Bei Problemen mit RCON prüfe die Server-Logausgabe und die korrekte `RCON_PASSWORD`-Einstellung.

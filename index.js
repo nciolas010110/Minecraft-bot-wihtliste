@@ -1,11 +1,16 @@
+/*
+  Haupt-Entrypoint des Bots.
+  - Lädt Umgebungsvariablen.
+  - Registriert Slash-Commands aus dem Ordner commands/.
+  - Startet den Discord-Client und behandelt Interaktionen.
+  - Aktiviert optionales Server-Monitoring.
+*/
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { Client, Collection, GatewayIntentBits, Events, REST, Routes } from 'discord.js';
-import dotenv from 'dotenv';
 import { startServerMonitor } from './utils/monitor.js';
-
-dotenv.config();
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;

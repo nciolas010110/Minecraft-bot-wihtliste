@@ -1,3 +1,9 @@
+/*
+  /whitelistremove
+  - Entfernt einen Minecraft-Spieler von der Whitelist.
+  - Löscht die zugehörige Discord/Minecraft-Zuordnung.
+  - Nur Administratoren dürfen diesen Befehl ausführen.
+*/
 import { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from 'discord.js';
 import { runRconCommand } from '../utils/rcon.js';
 import { removeUserMappingByMcName } from '../utils/storage.js';

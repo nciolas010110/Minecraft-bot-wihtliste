@@ -1,3 +1,8 @@
+/*
+  /list
+  - Zeigt alle gespeicherten Discord- und Minecraft-Zuordnungen an.
+  - Markiert gebannte Einträge sichtbar.
+*/
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getAllMappings, getBanLists } from '../utils/storage.js';
 

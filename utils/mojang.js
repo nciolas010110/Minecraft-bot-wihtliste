@@ -1,3 +1,8 @@
+/*
+  Mojang-API-Wrapper
+  - Prüft, ob ein Minecraft-Spielername gültig ist.
+  - Gibt `null` zurück, wenn der Name nicht existiert.
+*/
 const MOJANG_API = 'https://api.mojang.com/users/profiles/minecraft';
 
 // Prüft, ob ein Minecraft-Name bei Mojang existiert und gibt die Account-Daten zurück.
