@@ -1,15 +1,16 @@
 # Minecraft Whitelist Bot
 
-Dieser Discord-Bot ermöglicht das Whitelisten von Minecraft-Spielern per Slash-Command und steuert den Minecraft-Server über RCON.
+Dieser Discord-Bot verwaltet die Minecraft-Whitelist per einem übersichtlichen Slash-Command und steuert den Minecraft-Server über RCON.
 
 ## Übersicht
 
 Dieser Bot bietet:
-- `/whitelist mcname:<Minecraft-Name>` zum Freischalten auf der Minecraft-Whitelist
-- `/whitelistremove mcname:<Minecraft-Name>` zum Entfernen von der Whitelist
-- `/whitelistban discord:<Benutzer> | mcname:<Minecraft-Name>` zum Sperren und Whitelist-Entfernen
-- `/user` zur Abfrage gespeicherter Zuordnungen
-- `/list` zur Anzeige aller gespeicherten Zuordnungen
+- `/whitelist add mcname:<Minecraft-Name>` zum Freischalten
+- `/whitelist remove mcname:<Minecraft-Name>` zum Entfernen
+- `/whitelist ban mcname:<Minecraft-Name>` zum Sperren und Entfernen
+- `/whitelist unban mcname:<Minecraft-Name>` zum Entsperren
+- `/whitelist user` zur Abfrage der eigenen Zuordnung
+- `/whitelist list` zur Anzeige aller Zuordnungen für Administratoren
 - Optionales Server-Monitoring per RCON (TPS, RAM)
 
 ## Voraussetzungen
@@ -45,6 +46,8 @@ Die folgenden Variablen werden unterstützt:
 - `RCON_HOST` - Hostname oder IP des Minecraft-Servers
 - `RCON_PORT` - RCON-Port (Standard: `25575`)
 - `RCON_PASSWORD` - RCON-Passwort
+- `RCON_TIMEOUT_MS` - optionaler RCON-Timeout in Millisekunden (Standard: `10000`)
+- `MOJANG_TIMEOUT_MS` - optionaler Mojang-API-Timeout in Millisekunden (Standard: `8000`)
 - `MONITOR_CHANNEL_ID` - optional, Discord-Kanal-ID für Monitoring-Meldungen
 - `MONITOR_INTERVAL_SECONDS` - Überwachungsintervall in Sekunden (Standard: `60`)
 - `MONITOR_RAM_THRESHOLD` - RAM-Schwelle in Prozent für Warnungen (Standard: `80`)
@@ -52,7 +55,7 @@ Die folgenden Variablen werden unterstützt:
 
 ## Slash-Command-Referenz
 
-### `/whitelist mcname:<Minecraft-Name>`
+### `/whitelist add mcname:<Minecraft-Name>`
 - Prüft, ob der Name bei Mojang existiert.
 - Führt `whitelist add <Name>` via RCON aus.
 - Speichert die Zuordnung Discord-ID → Minecraft-Name in `data/storage.json`.
@@ -60,26 +63,32 @@ Die folgenden Variablen werden unterstützt:
 - Verhindert doppeltes Mapping für Discord-Benutzer und Minecraft-Namen.
 - Fügt im Server, falls vorhanden, optional die Rolle `Whitelisted` hinzu.
 
-### `/whitelistremove mcname:<Minecraft-Name>`
+### `/whitelist remove mcname:<Minecraft-Name>`
 - Entfernt den Spieler von der Whitelist via RCON.
 - Löscht die zugehörige Mapping-Eintragung.
-- Nur Administratoren dürfen diesen Befehl verwenden.
+- Nur Administratoren dürfen diesen Unterbefehl verwenden.
 
-### `/whitelistban [discord:<Benutzer>] [mcname:<Minecraft-Name>]`
+### `/whitelist ban mcname:<Minecraft-Name>`
 - Banniert den angegebenen Minecraft-Namen per RCON (`ban <Name>`).
 - Entfernt den Namen von der Whitelist.
 - Speichert den Bann in `data/storage.json`.
-- Optional wird ein zugeordnetes Discord-Konto gesperrt.
-- Nur Administratoren dürfen diesen Befehl verwenden.
+- Ein vorhandenes zugeordnetes Discord-Konto wird automatisch mitgesperrt.
+- Nur Administratoren dürfen diesen Unterbefehl verwenden.
 
-### `/user`
-- Gibt die eigene Zuordnung aus, wenn keine Option gesetzt ist.
-- Optional per `discord` oder `mcname` abfragbar.
+### `/whitelist unban mcname:<Minecraft-Name>`
+- Hebt den Minecraft-Ban per RCON auf.
+- Entfernt den Namen aus der gespeicherten Bot-Bannliste.
+- Nur Administratoren dürfen diesen Unterbefehl verwenden.
+
+### `/whitelist user`
+- Gibt ohne Option die eigene Zuordnung aus.
+- Administratoren können optional per `discord` oder `mcname` abfragen.
 - Zeigt an, ob der Benutzer/Name gesperrt ist.
 
-### `/list`
+### `/whitelist list`
 - Listet alle gespeicherten Discord-IDs mit zugehörigen Minecraft-Namen.
 - Markiert gesperrte Einträge als `(Gebannt)`.
+- Nur Administratoren dürfen die vollständige Liste sehen.
 
 ## Dateien und Logik
 
@@ -97,26 +106,6 @@ Die folgenden Variablen werden unterstützt:
 - Speichert Mappings in `utils/storage.js`.
 - Versendet Ausgaben als Discord-Embed.
 
-### `commands/whitelistremove.js`
-- Löscht einen Minecraft-Namen von der Whitelist.
-- Entfernt die zugehörige Zuordnung aus dem Speicher.
-- Gibt den Serverantworttext zurück.
-
-### `commands/whitelistban.js`
-- Bannt einen Minecraft-Namen und entfernt ihn von der Whitelist.
-- Speichert Banns sowohl für Discord-ID als auch Namen.
-- Unterstützt Abfragen per Discord-Benutzer oder Namen.
-
-### `commands/user.js`
-- Fragt eine gespeicherte Zuordnung ab.
-- Unterstützt Abfrage per Discord-User oder Minecraft-Name.
-- Gibt Bannstatus zurück.
-
-### `commands/list.js`
-- Listet alle gespeicherten Mappings.
-- Versucht, Discord-Tags aus den IDs zu laden.
-- Markiert gebannte Einträge.
-
 ### `utils/mojang.js`
 - Enthält die Funktion `checkMinecraftUser(username)`.
 - Ruft die Mojang-API auf, um zu prüfen, ob ein Minecraft-Name existiert.
@@ -125,7 +114,8 @@ Die folgenden Variablen werden unterstützt:
 ### `utils/rcon.js`
 - Stellt eine RCON-Verbindung zum Server her.
 - Führt den übergebenen Befehl aus und beendet die Verbindung wieder.
-- Bricht bei fehlenden RCON-Konfigurationswerten ab.
+- Meldet fehlende Konfiguration beim jeweiligen Befehl und beendet nicht den gesamten Bot-Import.
+- Unterstützt einen Timeout über `RCON_TIMEOUT_MS`.
 
 ### `utils/storage.js`
 - Speichert Daten in `data/storage.json`.

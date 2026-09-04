@@ -9,17 +9,23 @@ import { Rcon } from 'rcon-client';
 const host = process.env.RCON_HOST;
 const port = Number(process.env.RCON_PORT || 25575);
 const password = process.env.RCON_PASSWORD;
-
-if (!host || !password) {
-  console.error('Fehler: RCON_HOST und RCON_PASSWORD müssen in der .env-Datei gesetzt sein.');
-  process.exit(1);
-}
+const timeoutMs = Number(process.env.RCON_TIMEOUT_MS || 10000);
 
 // Stellt eine RCON-Verbindung her und führt einen Befehl auf dem Minecraft-Server aus.
 export async function runRconCommand(command) {
-  const rcon = await Rcon.connect({ host, port, password });
+  if (!host || !password) {
+    throw new Error('RCON_HOST und RCON_PASSWORD müssen in der .env-Datei gesetzt sein.');
+  }
+
+  const rcon = await Promise.race([
+    Rcon.connect({ host, port, password }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('RCON-Verbindung timeout.')), timeoutMs))
+  ]);
   try {
-    const response = await rcon.send(command);
+    const response = await Promise.race([
+      rcon.send(command),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('RCON-Antwort timeout.')), timeoutMs))
+    ]);
     await rcon.end();
     return response;
   } catch (error) {

@@ -1,26 +1,73 @@
-/*
-  /whitelist
-  - Prüft einen Minecraft-Namen über die Mojang-API.
-  - Führt `whitelist add <Name>` via RCON aus.
-  - Speichert die Zuordnung zwischen Discord-ID und Minecraft-Name.
-  - Verwendet einen 30 Sekunden Cooldown pro Discord-Benutzer.
-*/
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from 'discord.js';
 import { checkMinecraftUser } from '../utils/mojang.js';
 import { runRconCommand } from '../utils/rcon.js';
-import { setUserMapping, isBanned, getUserMapping, getDiscordByMcName } from '../utils/storage.js';
+import {
+  addBan,
+  getAllMappings,
+  getBanLists,
+  getDiscordByMcName,
+  getUserMapping,
+  isBanned,
+  removeBan,
+  removeUserMappingByMcName,
+  setUserMapping
+} from '../utils/storage.js';
+import { normalizeMinecraftName } from '../utils/minecraft.js';
 
 const cooldowns = new Map();
 const COOLDOWN_SECONDS = 30;
+const MAX_LIST_ENTRIES = 25;
 
 export const data = new SlashCommandBuilder()
   .setName('whitelist')
-  .setDescription('Whitelist einen Minecraft-Spieler auf dem Server')
-  .addStringOption((option) =>
-    option.setName('mcname').setDescription('Minecraft-Name').setRequired(true)
-  );
+  .setDescription('Minecraft-Whitelist verwalten')
+  .addSubcommand((subcommand) => subcommand
+    .setName('add')
+    .setDescription('Dich selbst auf die Whitelist setzen')
+    .addStringOption((option) => option
+      .setName('mcname')
+      .setDescription('Minecraft-Name')
+      .setRequired(true)))
+  .addSubcommand((subcommand) => subcommand
+    .setName('remove')
+    .setDescription('Einen Spieler von der Whitelist entfernen')
+    .addStringOption((option) => option.setName('mcname').setDescription('Minecraft-Name').setRequired(true)))
+  .addSubcommand((subcommand) => subcommand
+    .setName('ban')
+    .setDescription('Einen Spieler bannen und entfernen')
+    .addStringOption((option) => option.setName('mcname').setDescription('Minecraft-Name').setRequired(true)))
+  .addSubcommand((subcommand) => subcommand
+    .setName('unban')
+    .setDescription('Einen Spieler entbannen')
+    .addStringOption((option) => option.setName('mcname').setDescription('Minecraft-Name').setRequired(true)))
+  .addSubcommand((subcommand) => subcommand
+    .setName('list')
+    .setDescription('Alle gespeicherten Zuordnungen anzeigen'))
+  .addSubcommand((subcommand) => subcommand
+    .setName('user')
+    .setDescription('Eine Zuordnung anzeigen')
+    .addUserOption((option) => option.setName('discord').setDescription('Discord-Benutzer, nur für Administratoren'))
+    .addStringOption((option) => option.setName('mcname').setDescription('Minecraft-Name, nur für Administratoren')));
 
 export async function execute(interaction) {
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand === 'add') return addPlayer(interaction);
+  if (subcommand === 'remove') return removePlayer(interaction);
+  if (subcommand === 'ban') return banPlayer(interaction);
+  if (subcommand === 'unban') return unbanPlayer(interaction);
+  if (subcommand === 'list') return listPlayers(interaction);
+  return showUser(interaction);
+}
+
+function isAdmin(interaction) {
+  return interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+}
+
+function getMinecraftName(interaction) {
+  return normalizeMinecraftName(interaction.options.getString('mcname', true));
+}
+
+async function addPlayer(interaction) {
   const userId = interaction.user.id;
   const now = Date.now();
   const cooldownExpiration = cooldowns.get(userId) || 0;
@@ -38,7 +85,10 @@ export async function execute(interaction) {
     });
   }
 
-  const mcName = interaction.options.getString('mcname', true).trim();
+  const mcName = getMinecraftName(interaction);
+  if (!mcName) {
+    return interaction.reply({ content: 'Der Minecraft-Name muss 3 bis 16 Zeichen lang sein und darf nur Buchstaben, Zahlen und Unterstriche enthalten.', ephemeral: true });
+  }
 
   await interaction.deferReply({ flags: 64 });
 
@@ -60,7 +110,7 @@ export async function execute(interaction) {
         embeds: [
           new EmbedBuilder()
             .setTitle('Bereits registriert')
-            .setDescription(`Du hast bereits den Minecraft-Namen **${existingMapping}** zugeordnet. Bitte entferne ihn zuerst mit "/whitelistremove" oder verwende denselben Namen erneut.`)
+            .setDescription(`Du hast bereits den Minecraft-Namen **${existingMapping}** zugeordnet. Bitte entferne ihn zuerst mit **/whitelist remove**.`)
             .setColor('Orange')
         ]
       });
@@ -135,4 +185,158 @@ export async function execute(interaction) {
       ]
     });
   }
+}
+
+async function removePlayer(interaction) {
+  if (!isAdmin(interaction)) return adminOnly(interaction);
+  const mcName = getMinecraftName(interaction);
+  if (!mcName) return invalidName(interaction);
+  await interaction.deferReply({ flags: 64 });
+
+  try {
+    const mapping = await getDiscordByMcName(mcName);
+    const response = await runRconCommand(`whitelist remove ${mcName}`);
+    await removeUserMappingByMcName(mcName);
+    await removeWhitelistedRole(interaction, mapping?.[0]);
+    return interaction.editReply({ embeds: [new EmbedBuilder()
+      .setTitle('Whitelist entfernt')
+      .setDescription(`**${mcName}** wurde von der Whitelist entfernt.`)
+      .addFields({ name: 'Serverantwort', value: response || 'Keine Antwort erhalten' })
+      .setColor('Green')] });
+  } catch (error) {
+    return handleCommandError(interaction, error, 'Der Spieler konnte nicht von der Whitelist entfernt werden.');
+  }
+}
+
+async function banPlayer(interaction) {
+  if (!isAdmin(interaction)) return adminOnly(interaction);
+  const mcName = getMinecraftName(interaction);
+  if (!mcName) return invalidName(interaction);
+  await interaction.deferReply({ flags: 64 });
+
+  try {
+    const mapping = await getDiscordByMcName(mcName);
+    const removeResponse = await runRconCommand(`whitelist remove ${mcName}`);
+    const banResponse = await runRconCommand(`ban ${mcName}`);
+    await addBan({ discordId: mapping?.[0], mcName });
+    await removeUserMappingByMcName(mcName);
+    await removeWhitelistedRole(interaction, mapping?.[0]);
+    return interaction.editReply({ embeds: [new EmbedBuilder()
+      .setTitle('Ban erfolgreich')
+      .setDescription(`**${mcName}** wurde gebannt und von der Whitelist entfernt.`)
+      .addFields(
+        { name: 'Whitelist-Antwort', value: removeResponse || 'Keine Antwort erhalten' },
+        { name: 'Ban-Antwort', value: banResponse || 'Keine Antwort erhalten' }
+      )
+      .setColor('DarkRed')] });
+  } catch (error) {
+    return handleCommandError(interaction, error, 'Der Spieler konnte nicht gebannt werden.');
+  }
+}
+
+async function unbanPlayer(interaction) {
+  if (!isAdmin(interaction)) return adminOnly(interaction);
+  const mcName = getMinecraftName(interaction);
+  if (!mcName) return invalidName(interaction);
+  await interaction.deferReply({ flags: 64 });
+
+  try {
+    const response = await runRconCommand(`pardon ${mcName}`);
+    await removeBan({ mcName });
+    return interaction.editReply({ embeds: [new EmbedBuilder()
+      .setTitle('Unban erfolgreich')
+      .setDescription(`**${mcName}** wurde entbannt.`)
+      .addFields({ name: 'Serverantwort', value: response || 'Keine Antwort erhalten' })
+      .setColor('Green')] });
+  } catch (error) {
+    return handleCommandError(interaction, error, 'Der Spieler konnte nicht entbannt werden.');
+  }
+}
+
+async function listPlayers(interaction) {
+  if (!isAdmin(interaction)) return adminOnly(interaction);
+  await interaction.deferReply({ flags: 64 });
+
+  try {
+    const mappings = await getAllMappings();
+    const bans = await getBanLists();
+    const allEntries = Object.entries(mappings);
+    const entries = allEntries.slice(0, MAX_LIST_ENTRIES);
+    if (!entries.length) return interaction.editReply({ content: 'Es sind noch keine Zuordnungen gespeichert.' });
+
+    const lines = await Promise.all(entries.map(async ([discordId, mcName]) => {
+      let userLabel = discordId;
+      try {
+        const user = await interaction.client.users.fetch(discordId);
+        userLabel = user.tag;
+      } catch {
+        // Die Discord-ID bleibt als Fallback sichtbar.
+      }
+      const banned = bans.discord.includes(discordId) || bans.mcNames.includes(mcName.toLowerCase());
+      return `**${userLabel}** -> **${mcName}**${banned ? ' (Gebannt)' : ''}`;
+    }));
+
+    const suffix = allEntries.length > MAX_LIST_ENTRIES
+      ? `\n\nWeitere Einträge: ${allEntries.length - MAX_LIST_ENTRIES}`
+      : '';
+    return interaction.editReply({ embeds: [new EmbedBuilder()
+      .setTitle('Whitelist-Zuordnungen')
+      .setDescription(`${lines.join('\n')}${suffix}`)
+      .setColor('Blue')] });
+  } catch (error) {
+    return handleCommandError(interaction, error, 'Die Zuordnungen konnten nicht geladen werden.');
+  }
+}
+
+async function showUser(interaction) {
+  const discordUser = interaction.options.getUser('discord');
+  const mcNameOption = interaction.options.getString('mcname');
+  if ((discordUser || mcNameOption) && !isAdmin(interaction)) return adminOnly(interaction);
+  await interaction.deferReply({ flags: 64 });
+
+  try {
+    const mappingByName = mcNameOption ? await getDiscordByMcName(mcNameOption) : null;
+    const discordId = discordUser?.id || mappingByName?.[0] || interaction.user.id;
+    const mappedName = await getUserMapping(discordId);
+    const resolvedName = mappedName || (mcNameOption && normalizeMinecraftName(mcNameOption));
+    if (!resolvedName) return interaction.editReply({ content: 'Keine Zuordnung gefunden.' });
+
+    const bans = await getBanLists();
+    const banned = bans.discord.includes(discordId) || bans.mcNames.includes(resolvedName.toLowerCase());
+    return interaction.editReply({ embeds: [new EmbedBuilder()
+      .setTitle('Benutzerinformation')
+      .addFields(
+        { name: 'Discord', value: discordId || 'Nicht verknüpft', inline: true },
+        { name: 'Minecraft', value: resolvedName, inline: true },
+        { name: 'Gebannt', value: banned ? 'Ja' : 'Nein', inline: true }
+      )
+      .setColor(banned ? 'Red' : 'Green')] });
+  } catch (error) {
+    return handleCommandError(interaction, error, 'Die Benutzerinformationen konnten nicht geladen werden.');
+  }
+}
+
+async function removeWhitelistedRole(interaction, discordId) {
+  if (!interaction.guild || !discordId) return;
+  const role = interaction.guild.roles.cache.find((candidate) => candidate.name === 'Whitelisted');
+  if (!role) return;
+  try {
+    const member = await interaction.guild.members.fetch(discordId);
+    await member.roles.remove(role);
+  } catch (error) {
+    console.error('Fehler beim Entfernen der Whitelisted-Rolle:', error);
+  }
+}
+
+function adminOnly(interaction) {
+  return interaction.reply({ content: 'Nur Administratoren dürfen diesen Unterbefehl verwenden.', ephemeral: true });
+}
+
+function invalidName(interaction) {
+  return interaction.reply({ content: 'Der Minecraft-Name ist ungültig.', ephemeral: true });
+}
+
+async function handleCommandError(interaction, error, message) {
+  console.error(message, error);
+  return interaction.editReply({ embeds: [new EmbedBuilder().setTitle('Befehl fehlgeschlagen').setDescription(message).setColor('Red')] });
 }

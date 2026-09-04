@@ -5,6 +5,7 @@
 */
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
 
 const storagePath = path.join(process.cwd(), 'data', 'storage.json');
 const defaultStorage = {
@@ -14,6 +15,20 @@ const defaultStorage = {
     mcNames: []
   }
 };
+
+let writeQueue = Promise.resolve();
+
+function normalizeStorage(storage) {
+  return {
+    userMappings: storage?.userMappings && typeof storage.userMappings === 'object'
+      ? storage.userMappings
+      : {},
+    bans: {
+      discord: Array.isArray(storage?.bans?.discord) ? storage.bans.discord : [],
+      mcNames: Array.isArray(storage?.bans?.mcNames) ? storage.bans.mcNames : []
+    }
+  };
+}
 
 async function ensureStorageFile() {
   await fs.mkdir(path.dirname(storagePath), { recursive: true });
@@ -27,12 +42,25 @@ async function ensureStorageFile() {
 async function readStorage() {
   await ensureStorageFile();
   const raw = await fs.readFile(storagePath, 'utf8');
-  return JSON.parse(raw);
+  return normalizeStorage(JSON.parse(raw));
 }
 
 async function writeStorage(data) {
   await ensureStorageFile();
-  await fs.writeFile(storagePath, JSON.stringify(data, null, 2), 'utf8');
+  const temporaryPath = `${storagePath}.${crypto.randomUUID()}.tmp`;
+  await fs.writeFile(temporaryPath, `${JSON.stringify(normalizeStorage(data), null, 2)}\n`, 'utf8');
+  await fs.rename(temporaryPath, storagePath);
+}
+
+async function updateStorage(mutator) {
+  const operation = writeQueue.then(async () => {
+    const storage = await readStorage();
+    const result = await mutator(storage);
+    await writeStorage(storage);
+    return result;
+  });
+  writeQueue = operation.catch(() => undefined);
+  return operation;
 }
 
 export async function getUserMapping(discordId) {
@@ -46,39 +74,51 @@ export async function getDiscordByMcName(mcName) {
 }
 
 export async function setUserMapping(discordId, mcName) {
-  const storage = await readStorage();
-  storage.userMappings[discordId] = mcName;
-  await writeStorage(storage);
+  await updateStorage((storage) => {
+    storage.userMappings[discordId] = mcName;
+  });
 }
 
 export async function removeUserMappingByDiscord(discordId) {
-  const storage = await readStorage();
-  delete storage.userMappings[discordId];
-  await writeStorage(storage);
+  await updateStorage((storage) => {
+    delete storage.userMappings[discordId];
+  });
 }
 
 export async function removeUserMappingByMcName(mcName) {
-  const storage = await readStorage();
-  for (const [discordId, savedName] of Object.entries(storage.userMappings)) {
-    if (savedName.toLowerCase() === mcName.toLowerCase()) {
-      delete storage.userMappings[discordId];
+  await updateStorage((storage) => {
+    for (const [discordId, savedName] of Object.entries(storage.userMappings)) {
+      if (savedName.toLowerCase() === mcName.toLowerCase()) {
+        delete storage.userMappings[discordId];
+      }
     }
-  }
-  await writeStorage(storage);
+  });
 }
 
 export async function addBan({ discordId, mcName }) {
-  const storage = await readStorage();
-  if (discordId && !storage.bans.discord.includes(discordId)) {
-    storage.bans.discord.push(discordId);
-  }
-  if (mcName) {
-    const normalized = mcName.toLowerCase();
-    if (!storage.bans.mcNames.includes(normalized)) {
-      storage.bans.mcNames.push(normalized);
+  await updateStorage((storage) => {
+    if (discordId && !storage.bans.discord.includes(discordId)) {
+      storage.bans.discord.push(discordId);
     }
-  }
-  await writeStorage(storage);
+    if (mcName) {
+      const normalized = mcName.toLowerCase();
+      if (!storage.bans.mcNames.includes(normalized)) {
+        storage.bans.mcNames.push(normalized);
+      }
+    }
+  });
+}
+
+export async function removeBan({ discordId, mcName }) {
+  await updateStorage((storage) => {
+    if (discordId) {
+      storage.bans.discord = storage.bans.discord.filter((id) => id !== discordId);
+    }
+    if (mcName) {
+      const normalized = mcName.toLowerCase();
+      storage.bans.mcNames = storage.bans.mcNames.filter((name) => name !== normalized);
+    }
+  });
 }
 
 export async function isBanned({ discordId, mcName }) {
