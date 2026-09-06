@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { checkMinecraftUser } from '../utils/mojang.js';
 import { runRconCommand } from '../utils/rcon.js';
 import {
@@ -13,6 +13,8 @@ import {
   setUserMapping
 } from '../utils/storage.js';
 import { normalizeMinecraftName } from '../utils/minecraft.js';
+import { isModerator, moderatorOnly } from '../utils/permissions.js';
+import { logAuditEvent } from '../utils/audit.js';
 
 const cooldowns = new Map();
 const COOLDOWN_SECONDS = 30;
@@ -57,10 +59,6 @@ export async function execute(interaction) {
   if (subcommand === 'unban') return unbanPlayer(interaction);
   if (subcommand === 'list') return listPlayers(interaction);
   return showUser(interaction);
-}
-
-function isAdmin(interaction) {
-  return interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
 }
 
 function getMinecraftName(interaction) {
@@ -143,6 +141,7 @@ async function addPlayer(interaction) {
     const rconResponse = await runRconCommand(`whitelist add ${mcName}`);
     await setUserMapping(userId, mcName);
     cooldowns.set(userId, now + COOLDOWN_SECONDS * 1000);
+    await logAuditEvent(interaction.client, { action: 'Whitelist hinzugefügt', interaction, minecraftName: mcName, details: 'Spieler registriert' });
 
     const successEmbed = new EmbedBuilder()
       .setTitle('Whitelist erfolgreich')
@@ -188,7 +187,7 @@ async function addPlayer(interaction) {
 }
 
 async function removePlayer(interaction) {
-  if (!isAdmin(interaction)) return adminOnly(interaction);
+  if (!isModerator(interaction)) return moderatorOnly(interaction);
   const mcName = getMinecraftName(interaction);
   if (!mcName) return invalidName(interaction);
   await interaction.deferReply({ flags: 64 });
@@ -198,6 +197,7 @@ async function removePlayer(interaction) {
     const response = await runRconCommand(`whitelist remove ${mcName}`);
     await removeUserMappingByMcName(mcName);
     await removeWhitelistedRole(interaction, mapping?.[0]);
+    await logAuditEvent(interaction.client, { action: 'Whitelist entfernt', interaction, minecraftName: mcName, details: 'Spieler entfernt' });
     return interaction.editReply({ embeds: [new EmbedBuilder()
       .setTitle('Whitelist entfernt')
       .setDescription(`**${mcName}** wurde von der Whitelist entfernt.`)
@@ -209,7 +209,7 @@ async function removePlayer(interaction) {
 }
 
 async function banPlayer(interaction) {
-  if (!isAdmin(interaction)) return adminOnly(interaction);
+  if (!isModerator(interaction)) return moderatorOnly(interaction);
   const mcName = getMinecraftName(interaction);
   if (!mcName) return invalidName(interaction);
   await interaction.deferReply({ flags: 64 });
@@ -221,6 +221,7 @@ async function banPlayer(interaction) {
     await addBan({ discordId: mapping?.[0], mcName });
     await removeUserMappingByMcName(mcName);
     await removeWhitelistedRole(interaction, mapping?.[0]);
+    await logAuditEvent(interaction.client, { action: 'Spieler gebannt', interaction, minecraftName: mcName, details: 'Spieler gebannt und entfernt' });
     return interaction.editReply({ embeds: [new EmbedBuilder()
       .setTitle('Ban erfolgreich')
       .setDescription(`**${mcName}** wurde gebannt und von der Whitelist entfernt.`)
@@ -235,7 +236,7 @@ async function banPlayer(interaction) {
 }
 
 async function unbanPlayer(interaction) {
-  if (!isAdmin(interaction)) return adminOnly(interaction);
+  if (!isModerator(interaction)) return moderatorOnly(interaction);
   const mcName = getMinecraftName(interaction);
   if (!mcName) return invalidName(interaction);
   await interaction.deferReply({ flags: 64 });
@@ -243,6 +244,7 @@ async function unbanPlayer(interaction) {
   try {
     const response = await runRconCommand(`pardon ${mcName}`);
     await removeBan({ mcName });
+    await logAuditEvent(interaction.client, { action: 'Spieler entbannt', interaction, minecraftName: mcName, details: 'Spieler entbannt' });
     return interaction.editReply({ embeds: [new EmbedBuilder()
       .setTitle('Unban erfolgreich')
       .setDescription(`**${mcName}** wurde entbannt.`)
@@ -254,7 +256,7 @@ async function unbanPlayer(interaction) {
 }
 
 async function listPlayers(interaction) {
-  if (!isAdmin(interaction)) return adminOnly(interaction);
+  if (!isModerator(interaction)) return moderatorOnly(interaction);
   await interaction.deferReply({ flags: 64 });
 
   try {
@@ -291,7 +293,7 @@ async function listPlayers(interaction) {
 async function showUser(interaction) {
   const discordUser = interaction.options.getUser('discord');
   const mcNameOption = interaction.options.getString('mcname');
-  if ((discordUser || mcNameOption) && !isAdmin(interaction)) return adminOnly(interaction);
+  if ((discordUser || mcNameOption) && !isModerator(interaction)) return moderatorOnly(interaction);
   await interaction.deferReply({ flags: 64 });
 
   try {
@@ -326,10 +328,6 @@ async function removeWhitelistedRole(interaction, discordId) {
   } catch (error) {
     console.error('Fehler beim Entfernen der Whitelisted-Rolle:', error);
   }
-}
-
-function adminOnly(interaction) {
-  return interaction.reply({ content: 'Nur Administratoren dürfen diesen Unterbefehl verwenden.', ephemeral: true });
 }
 
 function invalidName(interaction) {

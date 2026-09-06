@@ -8,6 +8,7 @@ import path from 'path';
 import crypto from 'crypto';
 
 const storagePath = path.join(process.cwd(), 'data', 'storage.json');
+const backupPath = `${storagePath}.bak`;
 const defaultStorage = {
   userMappings: {},
   bans: {
@@ -47,6 +48,7 @@ async function readStorage() {
 
 async function writeStorage(data) {
   await ensureStorageFile();
+  await fs.copyFile(storagePath, backupPath);
   const temporaryPath = `${storagePath}.${crypto.randomUUID()}.tmp`;
   await fs.writeFile(temporaryPath, `${JSON.stringify(normalizeStorage(data), null, 2)}\n`, 'utf8');
   await fs.rename(temporaryPath, storagePath);

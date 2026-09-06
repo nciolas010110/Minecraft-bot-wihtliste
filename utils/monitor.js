@@ -15,7 +15,8 @@ const tpsThreshold = Number(process.env.MONITOR_TPS_THRESHOLD || 16);
 const state = {
   ramAlert: false,
   tpsAlert: false,
-  unsupportedCommandAlert: false
+  unsupportedCommandAlert: false,
+  connectionAlert: false
 };
 
 function parseMemoryValue(value, unit) {
@@ -134,6 +135,16 @@ export async function startServerMonitor(client) {
       }
     } catch (error) {
       console.error('Server-Monitor: Fehler beim Abfragen des Servers:', error);
+      if (!state.connectionAlert) {
+        await channel.send({ content: 'Server-Monitor: Der Minecraft-Server oder RCON ist nicht erreichbar.' });
+        state.connectionAlert = true;
+      }
+      return;
+    }
+
+    if (state.connectionAlert) {
+      await channel.send({ content: 'Server-Monitor: Die Verbindung zum Minecraft-Server ist wieder hergestellt.' });
+      state.connectionAlert = false;
     }
   }
 
