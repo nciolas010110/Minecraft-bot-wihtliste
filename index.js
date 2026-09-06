@@ -55,6 +55,8 @@ client.once(Events.ClientReady, async () => {
     if (guildId && isSnowflake(guildId)) {
       await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
       console.log('Slash-Commands für den Testserver registriert.');
+      await rest.put(Routes.applicationCommands(clientId), { body: [] });
+      console.log('Alte globale Slash-Commands entfernt.');
     } else if (guildId) {
       console.warn('Ungültige GUILD_ID in .env erkannt. Verwende globale Registrierung statt Guild-Registrierung.');
       await rest.put(Routes.applicationCommands(clientId), { body: commands });
