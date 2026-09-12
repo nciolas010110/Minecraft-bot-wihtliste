@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from 'discord.js';
 import { checkMinecraftUser } from '../utils/mojang.js';
 import { runRconCommand } from '../utils/rcon.js';
 import {
@@ -290,14 +290,8 @@ async function banPlayer(interaction) {
       await removeUserMappingByMcName(mcName);
     }
 
-    if (scopeIncludesDiscord(scope) && discordId && discordBanEnabled && interaction.guild) {
-      try {
-        await interaction.guild.bans.create(discordId, { reason: sanitizeRconText(reason, 400) });
-        notes.push('Discord-Server-Bann gesetzt.');
-      } catch (discordError) {
-        console.error('Discord-Bann fehlgeschlagen:', discordError);
-        notes.push('Discord-Server-Bann fehlgeschlagen (fehlende Rechte oder Rollenhierarchie).');
-      }
+    if (scopeIncludesDiscord(scope) && discordId) {
+      notes.push(await applyDiscordBan(interaction, discordId, reason));
     }
 
     await removeWhitelistedRole(interaction, discordId);
@@ -374,14 +368,8 @@ async function unbanPlayer(interaction) {
       }
     }
 
-    if (discordId && (!scope || scopeIncludesDiscord(scope)) && discordBanEnabled && interaction.guild) {
-      try {
-        await interaction.guild.bans.remove(discordId, sanitizeRconText(reason || 'Entbannt über den Bot', 400));
-        notes.push('Discord-Server-Bann aufgehoben.');
-      } catch (discordError) {
-        console.error('Discord-Entbannung fehlgeschlagen:', discordError);
-        notes.push('Discord-Server-Bann konnte nicht aufgehoben werden (eventuell war keiner gesetzt).');
-      }
+    if (discordId && (!scope || scopeIncludesDiscord(scope))) {
+      notes.push(await liftDiscordBan(interaction, discordId, reason));
     }
 
     const lifted = await removeBan({
@@ -508,6 +496,52 @@ async function showUser(interaction) {
     return interaction.editReply({ embeds: [embed] });
   } catch (error) {
     return handleCommandError(interaction, error, 'Die Benutzerinformationen konnten nicht geladen werden.');
+  }
+}
+
+// Prüft, ob der Discord-Bann überhaupt versucht werden kann, und sagt sonst, was fehlt.
+// So sieht die Moderation im Ergebnis, warum nur der Minecraft-Bann gesetzt wurde.
+function discordBanBlocker(interaction) {
+  if (!discordBanEnabled) return 'DISCORD_BAN_ENABLED steht nicht auf true. Der Bann ist nur gespeichert.';
+  if (!interaction.guild) return 'Der Befehl wurde nicht auf einem Server ausgeführt.';
+  const botMember = interaction.guild.members.me;
+  if (!botMember) return 'Der Bot konnte sich selbst auf dem Server nicht finden.';
+  if (!botMember.permissions.has(PermissionsBitField.Flags.BanMembers)) {
+    return 'Dem Bot fehlt das Recht "Mitglieder bannen".';
+  }
+  return null;
+}
+
+// Discord meldet fehlende Rechte und eine zu tiefe Bot-Rolle beide als Code 50013.
+function describeDiscordError(error, fallback) {
+  if (error?.code === 50013) {
+    return 'Discord hat die Aktion abgelehnt: Dem Bot fehlt das Recht "Mitglieder bannen" oder seine Rolle steht unter der Rolle des Mitglieds.';
+  }
+  if (error?.code === 10026) return 'Für dieses Konto war kein Discord-Server-Bann gesetzt.';
+  return fallback;
+}
+
+async function applyDiscordBan(interaction, discordId, reason) {
+  const blocker = discordBanBlocker(interaction);
+  if (blocker) return `Discord-Server-Bann übersprungen: ${blocker}`;
+  try {
+    await interaction.guild.bans.create(discordId, { reason: sanitizeRconText(reason, 400) });
+    return 'Discord-Server-Bann gesetzt.';
+  } catch (error) {
+    console.error('Discord-Bann fehlgeschlagen:', error);
+    return describeDiscordError(error, 'Discord-Server-Bann fehlgeschlagen.');
+  }
+}
+
+async function liftDiscordBan(interaction, discordId, reason) {
+  const blocker = discordBanBlocker(interaction);
+  if (blocker) return `Discord-Entbannung übersprungen: ${blocker}`;
+  try {
+    await interaction.guild.bans.remove(discordId, sanitizeRconText(reason || 'Entbannt über den Bot', 400));
+    return 'Discord-Server-Bann aufgehoben.';
+  } catch (error) {
+    console.error('Discord-Entbannung fehlgeschlagen:', error);
+    return describeDiscordError(error, 'Discord-Server-Bann konnte nicht aufgehoben werden (eventuell war keiner gesetzt).');
   }
 }
 

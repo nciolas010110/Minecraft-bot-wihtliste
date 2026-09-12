@@ -11,6 +11,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { Client, Collection, GatewayIntentBits, Events, REST, Routes } from 'discord.js';
 import { startServerMonitor } from './utils/monitor.js';
+import { logStartupDiagnostics, logDiscordError, logInfo } from './utils/diagnostics.js';
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
@@ -49,7 +50,8 @@ function isSnowflake(value) {
 }
 
 client.once(Events.ClientReady, async () => {
-  console.log(`Eingeloggt als ${client.user.tag}`);
+  logInfo(`Eingeloggt als ${client.user.tag} (${client.user.id})`);
+  logInfo(`Geladene Befehle: ${commands.map((command) => `/${command.name}`).join(', ') || 'keine'}`);
 
   try {
     if (guildId && isSnowflake(guildId)) {
@@ -69,6 +71,7 @@ client.once(Events.ClientReady, async () => {
     console.error('Fehler beim Registrieren der Slash-Commands:', error);
   }
 
+  await logStartupDiagnostics(client);
   await startServerMonitor(client);
 });
 
@@ -78,10 +81,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
 
+  // Ein Zeitstempel pro Befehl macht im Log nachvollziehbar, wer was ausgelöst hat.
+  const subcommand = interaction.options.getSubcommand(false);
+  const label = `/${interaction.commandName}${subcommand ? ` ${subcommand}` : ''}`;
+  const startedAt = Date.now();
+  logInfo(`${label} von ${interaction.user.tag} (${interaction.user.id}) auf "${interaction.guild?.name || 'Direktnachricht'}"`);
+
   try {
     await command.execute(interaction, client);
+    logInfo(`${label} abgeschlossen in ${Date.now() - startedAt} ms`);
   } catch (error) {
-    console.error('Fehler beim Ausführen des Befehls:', error);
+    logDiscordError(`${label} fehlgeschlagen`, error);
+    console.error(error);
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content: 'Es ist ein interner Fehler aufgetreten.', flags: 64 });
     } else {

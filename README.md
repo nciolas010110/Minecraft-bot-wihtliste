@@ -57,6 +57,48 @@ Die folgenden Variablen werden unterstützt:
 - `MODERATOR_ROLE_ID` - Rolle, die neben Administratoren sperren und Listen sehen darf
 - `DISCORD_BAN_ENABLED` - wenn `true`, wird bei einer Discord-Sperre zusätzlich der Discord-Server-Bann gesetzt (Standard: `false`)
 
+## Rechte des Bots auf dem Discord-Server
+
+Damit `/whitelist ban` wirklich vom Discord-Server bannt, reicht `DISCORD_BAN_ENABLED=true` allein nicht.
+Der Bot braucht auch die passenden Server-Rechte:
+
+| Recht | Wofür |
+| --- | --- |
+| Mitglieder bannen | Discord-Sperre und Entbannung |
+| Rollen verwalten | Rolle `Whitelisted` vergeben und entziehen |
+| Kanal ansehen, Nachrichten senden, Dateien anhängen | Audit-Log inklusive Beweisbildern |
+
+Einrichtung:
+
+1. **Rechte über den Invite-Link vergeben** - `CLIENT_ID` einsetzen und den Link im Browser öffnen:
+   `https://discord.com/api/oauth2/authorize?client_id=CLIENT_ID&permissions=268471300&scope=bot%20applications.commands`
+   Der Wert `268471300` enthält genau die Rechte aus der Tabelle.
+2. **Oder nachträglich im Server** - Servereinstellungen -> Rollen -> Rolle des Bots -> die Rechte oben aktivieren.
+3. **Rollenposition prüfen (wichtig)** - unter Servereinstellungen -> Rollen die Bot-Rolle nach oben ziehen,
+   sodass sie **über** den Rollen der Mitglieder steht, die gebannt werden sollen. Discord erlaubt keinem Bot,
+   ein Mitglied mit gleich hoher oder höherer Rolle zu bannen. Serverinhaber lassen sich nie bannen.
+4. **Bot neu starten** - beim Start prüft der Bot seine Rechte und schreibt fehlende Rechte sowie zu hoch
+   stehende Rollen ins Log.
+
+Fehlt etwas, bricht der Befehl nicht ab: Die Sperre wird gespeichert und im Ergebnis-Embed unter
+"Serveraktionen" steht, warum der Discord-Bann übersprungen wurde.
+
+## Log und Fehlersuche
+
+Beim Start schreibt der Bot eine Übersicht ins Log:
+
+- welche Umgebungsvariablen gesetzt sind (Token und Passwort nur als `gesetzt`/`FEHLT`, nie im Klartext),
+- eine Warnung, wenn `DISCORD_BAN_ENABLED` nicht auf `true` steht,
+- pro Server die Bot-Rolle mit ihrer Position, fehlende Rechte und Rollen, die über dem Bot stehen,
+- Hinweise, wenn `MODERATOR_ROLE_ID` oder die Rolle `Whitelisted` nicht existieren.
+
+Während des Betriebs wird jeder Slash-Command mit Zeitstempel, Benutzer, Server und Dauer protokolliert.
+Discord-Fehler erscheinen mit Fehlercode statt als roher Stacktrace, zum Beispiel:
+
+- `Discord-Code 50013` - fehlendes Recht oder die Bot-Rolle steht zu tief,
+- `Discord-Code 50001` - kein Zugriff auf den Kanal oder Server,
+- `Discord-Code 10026` - es war gar kein Discord-Bann gesetzt.
+
 ## Slash-Command-Referenz
 
 ### `/whitelist add mcname:<Minecraft-Name>`
@@ -84,7 +126,7 @@ Die folgenden Variablen werden unterstützt:
 - Beweisdateien werden in den Audit-Kanal kopiert, damit sie dauerhaft auffindbar bleiben.
 - Gespeichert werden Bereich, Grund, Beweise, Moderator und Zeitpunkt.
 - Ist der Minecraft-Server nicht erreichbar, wird die Sperre trotzdem gespeichert und im Ergebnis vermerkt.
-- Mit `DISCORD_BAN_ENABLED=true` wird zusätzlich der Discord-Server-Bann gesetzt.
+- Mit `DISCORD_BAN_ENABLED=true` wird zusätzlich der Discord-Server-Bann gesetzt; der Bot braucht dafür das Recht "Mitglieder bannen" und eine Rolle über dem Mitglied (siehe "Rechte des Bots auf dem Discord-Server").
 - Nur Administratoren und die Moderatorrolle dürfen diesen Unterbefehl verwenden.
 
 ### `/whitelist unban [mcname] [discord] [bereich] [grund]`
