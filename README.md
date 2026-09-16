@@ -56,6 +56,11 @@ Die folgenden Variablen werden unterstützt:
 - `AUDIT_LOG_CHANNEL_ID` - Kanal für Audit-Logs; dorthin werden auch Beweisbilder und -videos kopiert
 - `MODERATOR_ROLE_ID` - Rolle, die neben Administratoren sperren und Listen sehen darf
 - `DISCORD_BAN_ENABLED` - wenn `true`, wird bei einer Discord-Sperre zusätzlich der Discord-Server-Bann gesetzt (Standard: `false`)
+- `ADMIN_ROLE_ID` - optional, Rolle, die neben echten Administratoren `/server` verwenden darf
+- `RCON_BLOCKED_COMMANDS` - optionale Sperrliste, kommagetrennt; diese Befehle lehnt `/server konsole` immer ab
+- `JAIL_COMMAND_TEMPLATE` - Vorlage für `/server jail` (Standard: `jail {spieler} {jail} {dauer}`)
+- `UNJAIL_COMMAND_TEMPLATE` - Vorlage für `/server unjail` (Standard: `unjail {spieler}`)
+- `JAIL_DEFAULT_NAME` - optionales Standard-Jail, falls beim Befehl keins angegeben wird
 
 ## Rechte des Bots auf dem Discord-Server
 
@@ -160,6 +165,41 @@ Discord-Fehler erscheinen mit Fehlercode statt als roher Stacktrace, zum Beispie
 ### `/ban verlauf [seite]`
 - Wie `/ban liste`, zeigt zusätzlich die bereits aufgehobenen Sperren.
 
+### `/server konsole befehl:<Text> [bestaetigen]`
+- Führt einen beliebigen Konsolenbefehl auf dem Server aus, z. B. `give Steve minecraft:diamond 5`,
+  `tp Steve 0 100 0`, `weather clear`, `whitelist reload`. Der führende Slash darf weg.
+- Nur Administratoren oder Mitglieder mit `ADMIN_ROLE_ID`.
+- Kritische Befehle (`stop`, `restart`, `reload`, `op`, `deop`, `save-off`, `ban-ip`, `pardon-all`,
+  `whitelist off`) laufen erst mit `bestaetigen:true`.
+- Befehle in `RCON_BLOCKED_COMMANDS` werden immer abgelehnt.
+- Die Server-Antwort kommt als Embed zurück; jede Ausführung geht ins Audit-Log.
+
+### `/server status`
+- Zeigt Spielerzahl, Online-Namen, TPS (1m/5m/15m) und RAM-Auslastung.
+- `tps` und `gc` gibt es nur auf Paper/Spigot; fehlen sie, steht dort ein Hinweis statt eines Werts.
+
+### `/server spieler`
+- Kurzform von `/server status`: nur die Liste der Online-Spieler.
+
+### `/server sagen nachricht:<Text>`
+- Sendet eine Nachricht in den Server-Chat (`say`).
+
+### `/server kick spieler:<Name> [grund]`
+- Wirft einen Spieler vom Server.
+
+### `/server give spieler:<Name> item:<Item-ID> [anzahl]`
+- Gibt einem Spieler ein Item, Standardmenge 1.
+
+### `/server jail spieler:<Name> [jail] [dauer] [grund]`
+- Setzt einen Spieler ins Jail. Der Befehl wird aus `JAIL_COMMAND_TEMPLATE` gebaut
+  (Standard `jail {spieler} {jail} {dauer}`, passt zu EssentialsX).
+- Nutzt dein Plugin eine andere Syntax, passe die Vorlage in der `.env` an, z. B.
+  `JAIL_COMMAND_TEMPLATE=jail {spieler} -t {dauer} -j {jail} -r {grund}`.
+- Leere Platzhalter fallen weg, `JAIL_DEFAULT_NAME` setzt ein Standard-Jail.
+
+### `/server unjail spieler:<Name>`
+- Entlässt einen Spieler wieder, Vorlage `UNJAIL_COMMAND_TEMPLATE` (Standard `unjail {spieler}`).
+
 ## Dateien und Logik
 
 ### `index.js`
@@ -192,6 +232,20 @@ Discord-Fehler erscheinen mit Fehlercode statt als roher Stacktrace, zum Beispie
 - Führt den übergebenen Befehl aus und beendet die Verbindung wieder.
 - Meldet fehlende Konfiguration beim jeweiligen Befehl und beendet nicht den gesamten Bot-Import.
 - Unterstützt einen Timeout über `RCON_TIMEOUT_MS`.
+
+### `commands/server.js`
+- Fernsteuerung des Servers über Discord, nur für Administratoren.
+- Prüft Rechte mit `isAdministrator`, säubert Eingaben mit `utils/rconConsole.js`
+  und protokolliert jede Ausführung im Audit-Log.
+
+### `utils/rconConsole.js`
+- Entfernt Steuerzeichen und führende Slashes, damit kein zweiter Befehl eingeschleust wird.
+- Erkennt kritische und gesperrte Befehle.
+- Kürzt lange Server-Antworten auf Embed-Länge und baut Befehle aus Vorlagen.
+
+### `utils/serverStatus.js`
+- Liest TPS, RAM und Spielerliste über RCON.
+- Wird von `utils/monitor.js` und von `/server status` gemeinsam genutzt.
 
 ### `utils/storage.js`
 - Speichert Daten in `data/storage.json`.

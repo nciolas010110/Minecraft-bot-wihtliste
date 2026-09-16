@@ -6,6 +6,7 @@
 */
 import { EmbedBuilder } from 'discord.js';
 import { runRconCommand } from './rcon.js';
+import { parseServerStatus } from './serverStatus.js';
 
 const channelId = process.env.MONITOR_CHANNEL_ID;
 const intervalSeconds = Number(process.env.MONITOR_INTERVAL_SECONDS || 60);
@@ -18,49 +19,6 @@ const state = {
   unsupportedCommandAlert: false,
   connectionAlert: false
 };
-
-function parseMemoryValue(value, unit) {
-  const number = Number(value.replace(',', '.'));
-  if (Number.isNaN(number)) return null;
-  return unit.toLowerCase() === 'gb' ? number * 1024 : number;
-}
-
-function parseServerStatus(tpsOutput, gcOutput) {
-  const status = {
-    tps1m: null,
-    tps5m: null,
-    tps15m: null,
-    memoryUsedMB: null,
-    memoryTotalMB: null,
-    memoryPercent: null,
-    raw: `${tpsOutput}\n${gcOutput}`
-  };
-
-  const tpsMatch = tpsOutput.match(/TPS.*?:\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
-  if (tpsMatch) {
-    status.tps1m = Number(tpsMatch[1]);
-    status.tps5m = Number(tpsMatch[2]);
-    status.tps15m = Number(tpsMatch[3]);
-  }
-
-  const memoryMatch = gcOutput.match(/(?:Used memory|Memory use|Current memory use).*?(\d+(?:[.,]\d+)?)\s*(MB|GB).*?(?:of|\/|\()\s*(\d+(?:[.,]\d+)?)\s*(MB|GB)/i);
-  if (memoryMatch) {
-    const usedMB = parseMemoryValue(memoryMatch[1], memoryMatch[2]);
-    const totalMB = parseMemoryValue(memoryMatch[3], memoryMatch[4]);
-    if (usedMB !== null && totalMB !== null && totalMB > 0) {
-      status.memoryUsedMB = Math.round(usedMB);
-      status.memoryTotalMB = Math.round(totalMB);
-      status.memoryPercent = Math.round((usedMB / totalMB) * 100);
-    }
-  }
-
-  const memoryPercentMatch = gcOutput.match(/(\d+(?:[.,]\d+)?)\s*%/);
-  if (status.memoryPercent === null && memoryPercentMatch) {
-    status.memoryPercent = Math.round(Number(memoryPercentMatch[1].replace(',', '.')));
-  }
-
-  return status;
-}
 
 function buildAlertEmbed(status, issues, recovered = false) {
   const embed = new EmbedBuilder()

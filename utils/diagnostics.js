@@ -47,6 +47,8 @@ function logConfig() {
     ['RCON_PORT', process.env.RCON_PORT || 'nicht gesetzt'],
     ['RCON_PASSWORD', Boolean(process.env.RCON_PASSWORD)],
     ['MODERATOR_ROLE_ID', process.env.MODERATOR_ROLE_ID || 'nicht gesetzt'],
+    ['ADMIN_ROLE_ID', process.env.ADMIN_ROLE_ID || 'nicht gesetzt (nur echte Admins)'],
+    ['RCON_BLOCKED_COMMANDS', process.env.RCON_BLOCKED_COMMANDS || 'keine Sperrliste'],
     ['AUDIT_LOG_CHANNEL_ID', process.env.AUDIT_LOG_CHANNEL_ID || 'nicht gesetzt'],
     ['DISCORD_BAN_ENABLED', process.env.DISCORD_BAN_ENABLED || 'false']
   ];
